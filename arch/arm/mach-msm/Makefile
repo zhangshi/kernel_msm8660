@@ -23,6 +23,7 @@ GPIOMUX_OBJ_NAME:=gpiomux-8x60_p5lte.o
 endif
 
 obj-y += io.o dma.o memory.o
+obj-$(CONFIG_MSM_MPDEC)      += msm_mpdecision.o 
 ifndef CONFIG_ARM_ARCH_TIMER
 obj-y += timer.o
 endif
@@ -254,7 +255,11 @@ obj-$(CONFIG_ARCH_MSM8960) += acpuclock-8960.o
 obj-$(CONFIG_ARCH_MSM8960) += memory_topology.o
 obj-$(CONFIG_ARCH_MSM8960) += saw-regulator.o
 obj-$(CONFIG_ARCH_MSM8960) += devices-8960.o
+obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o 
 obj-$(CONFIG_ARCH_APQ8064) += devices-8960.o devices-8064.o
+obj-$(CONFIG_MSM_MPDEC) += msm_mpdecision.o
+obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o
+obj-$(CONFIG_KGSL_GPU_CTRL) += gpu_freq.o
 board-8960-all-objs += board-8960.o board-8960-camera.o board-8960-display.o board-8960-pmic.o board-8960-storage.o board-8960-gpiomux.o
 board-8930-all-objs += board-8930.o board-8930-camera.o board-8930-display.o board-8930-pmic.o board-8930-storage.o board-8930-gpiomux.o
 board-8064-all-objs += board-8064.o board-8064-pmic.o board-8064-storage.o board-8064-gpiomux.o board-8064-camera.o
@@ -266,7 +271,7 @@ obj-$(CONFIG_MACH_MSM8960_FLUID) += board-8960-all.o board-8960-regulator.o
 obj-$(CONFIG_MACH_MSM8930_CDP) += board-8930-all.o board-8930-regulator.o
 obj-$(CONFIG_MACH_MSM8930_MTP) += board-8930-all.o board-8930-regulator.o
 obj-$(CONFIG_MACH_MSM8930_FLUID) += board-8930-all.o board-8930-regulator.o
-obj-$(CONFIG_PM8921_BMS) += bms-batterydata.o batterydata-lib.o
+obj-$(CONFIG_ARCH_MSM8960) += bms-batterydata.o
 obj-$(CONFIG_MACH_APQ8064_SIM) += board-8064-all.o board-8064-regulator.o
 obj-$(CONFIG_MACH_APQ8064_RUMI3) += board-8064-all.o board-8064-regulator.o
 obj-$(CONFIG_ARCH_MSM9615) += board-9615.o devices-9615.o board-9615-regulator.o board-9615-gpiomux.o board-9615-storage.o
@@ -325,7 +330,13 @@ obj-y	+= gpio.o
 endif
 endif
 
+ifdef CONFIG_MSM_SLEEP_STATS
+obj-y += msm_rq_stats.o idle_stats.o
+else
+ifdef CONFIG_MSM_MPDEC
 obj-y += msm_rq_stats.o
+endif
+endif
 obj-$(CONFIG_MSM_SLEEP_STATS_DEVICE) += idle_stats_device.o
 obj-$(CONFIG_MSM_DCVS) += msm_dcvs_scm.o msm_dcvs.o msm_dcvs_idle.o
 obj-$(CONFIG_MSM_SHOW_RESUME_IRQ) += msm_show_resume_irq.o
@@ -354,5 +365,3 @@ obj-$(CONFIG_SEC_LOG_LAST_KMSG) += sec_last_log.o
 ifdef CONFIG_BT_BCM4330
 obj-$(CONFIG_BT_BCM4330) += board-bluetooth-bcm4330.o
 endif
-
-obj-$(CONFIG_ARCH_RANDOM) += early_random.o
