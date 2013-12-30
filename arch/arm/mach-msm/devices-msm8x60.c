@@ -2494,7 +2494,7 @@ struct msm_vidc_platform_data vidc_platform_data = {
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 	.memtype = ION_CP_MM_HEAP_ID,
 	.enable_ion = 1,
-	.cp_enabled = 0,
+	//.cp_enabled = 0,
     .secure_wb_heap = 1,
 #else
 	.memtype = MEMTYPE_SMI_KERNEL,
@@ -2504,8 +2504,8 @@ struct msm_vidc_platform_data vidc_platform_data = {
 	.disable_dmx = 0,
 	.disable_fullhd = 0,
 	.disable_turbo = 1
-    .fw_addr = 0x38000000,
-	.enable_sec_metadata = 0,
+    //.fw_addr = 0x38000000,
+	//.enable_sec_metadata = 0,
 };
 
 struct platform_device msm_device_vidc = {
