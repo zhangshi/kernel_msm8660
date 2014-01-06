@@ -33,22 +33,12 @@
 #include "acpuclock.h"
 #include <linux/suspend.h>
 
-#ifdef CONFIG_SEC_DVFS_DUAL
-#include <linux/cpu.h>
-#define DUALBOOST_DEFERED_QUEUE
-#endif
-#include <linux/cpufreq.h>
-#include <linux/kernel_stat.h>
-#include <linux/tick.h>
-#include "acpuclock.h"
-
 #define MAX_LONG_SIZE 24
 #define DEFAULT_RQ_POLL_JIFFIES 1
 #define DEFAULT_DEF_TIMER_JIFFIES 5
 
 struct notifier_block freq_transition;
 struct notifier_block cpu_hotplug;
-struct notifier_block freq_policy;
 
 struct cpu_load_data {
 	cputime64_t prev_cpu_idle;
@@ -65,27 +55,26 @@ struct cpu_load_data {
 
 static DEFINE_PER_CPU(struct cpu_load_data, cpuload);
 
-static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
-								cputime64_t *wall)
+static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
 {
-	cputime64_t idle_time;
-	cputime64_t cur_wall_time;
-	cputime64_t busy_time;
+	u64 idle_time;
+	u64 cur_wall_time;
+	u64 busy_time;
 
 	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
-	busy_time = cputime64_add(kstat_cpu(cpu).cpustat.user,
-				kstat_cpu(cpu).cpustat.system);
 
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.irq);
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.softirq);
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.steal);
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.nice);
+	busy_time  = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
 
-	idle_time = cputime64_sub(cur_wall_time, busy_time);
+	idle_time = cur_wall_time - busy_time;
 	if (wall)
-	*wall = (cputime64_t)jiffies_to_usecs(cur_wall_time);
+		*wall = jiffies_to_usecs(cur_wall_time);
 
-	return (cputime64_t)jiffies_to_usecs(idle_time);
+	return jiffies_to_usecs(idle_time);
 }
 
 static inline cputime64_t get_cpu_idle_time(unsigned int cpu, cputime64_t *wall)
@@ -237,22 +226,6 @@ static int system_suspend_handler(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
-static int freq_policy_handler(struct notifier_block *nb,
-			unsigned long event, void *data)
-{
-	struct cpufreq_policy *policy = data;
-	struct cpu_load_data *this_cpu = &per_cpu(cpuload, policy->cpu);
-
-	if (event != CPUFREQ_NOTIFY)
-		goto out;
-
-	this_cpu->policy_max = policy->max;
-
-	pr_debug("Policy max changed from %u to %u, event %lu\n",
-			this_cpu->policy_max, policy->max, event);
-out:
-	return NOTIFY_DONE;
-}
 
 static ssize_t hotplug_disable_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
@@ -383,11 +356,6 @@ static ssize_t run_queue_avg_show(struct kobject *kobj,
 	rq_info.rq_avg = 0;
 	spin_unlock_irqrestore(&rq_lock, flags);
 
-#ifdef CONFIG_SEC_DVFS_DUAL
-	if (is_dual_locked == 1)
-		val = val + 1000;
-#endif
-
 	return snprintf(buf, PAGE_SIZE, "%d.%d\n", val/10, val%10);
 }
 
@@ -434,11 +402,6 @@ static struct kobj_attribute run_queue_poll_ms_attr =
 static ssize_t show_def_timer_ms(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-#if defined (CONFIG_SEC_DVFS_DUAL)
-	if (is_sysfs_used == 1)
-		return snprintf(buf, MAX_LONG_SIZE, "%u\n", jiffies_to_msecs(rq_info.def_timer_jiffies));
-	else
-#endif
 	return snprintf(buf, MAX_LONG_SIZE, "%u\n", rq_info.def_interval);
 }
 
@@ -454,20 +417,15 @@ static ssize_t store_def_timer_ms(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t show_cpu_normalized_load(struct kobject *kobj,
-                struct kobj_attribute *attr, char *buf)
-{
-#ifdef CONFIG_SEC_DVFS_DUAL
-	if (is_dual_locked == 1)
-		return snprintf(buf, MAX_LONG_SIZE, "%u\n", report_load_at_max_freq() + 200);
-	else
-#endif
-	return snprintf(buf, MAX_LONG_SIZE, "%u\n", report_load_at_max_freq());
-}
-
 static struct kobj_attribute def_timer_ms_attr =
 	__ATTR(def_timer_ms, S_IWUSR | S_IRUSR, show_def_timer_ms,
 			store_def_timer_ms);
+
+static ssize_t show_cpu_normalized_load(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, MAX_LONG_SIZE, "%u\n", report_load_at_max_freq());
+}
 
 static struct kobj_attribute cpu_normalized_load_attr =
 	__ATTR(cpu_normalized_load, S_IWUSR | S_IRUSR, show_cpu_normalized_load,
@@ -513,7 +471,6 @@ static int __init msm_rq_stats_init(void)
 	int ret;
 	int i;
 	struct cpufreq_policy cpu_policy;
-
 	/* Bail out if this is not an SMP Target */
 	if (!is_smp()) {
 		rq_info.init = 0;
@@ -544,12 +501,9 @@ static int __init msm_rq_stats_init(void)
 	}
 	freq_transition.notifier_call = cpufreq_transition_handler;
 	cpu_hotplug.notifier_call = cpu_hotplug_handler;
-	freq_policy.notifier_call = freq_policy_handler;
 	cpufreq_register_notifier(&freq_transition,
 					CPUFREQ_TRANSITION_NOTIFIER);
 	register_hotcpu_notifier(&cpu_hotplug);
-	cpufreq_register_notifier(&freq_policy,
-					CPUFREQ_POLICY_NOTIFIER);
 
 	return ret;
 }
