@@ -836,26 +836,6 @@ void mdp4_dsi_cmd_free_base_pipe(struct msm_fb_data_type *mfd)
 	vctrl->base_pipe = NULL;
 }
 
-void mdp4_dsi_cmd_base_swap(int cndx, struct mdp4_overlay_pipe *pipe)
-{
-	struct vsycn_ctrl *vctrl;
-
-	if (cndx >= MAX_CONTROLLER) {
-		pr_err("%s: out or range: cndx=%d\n", __func__, cndx);
-		return;
-	}
-
-	vctrl = &vsync_ctrl_db[cndx];
-	vctrl->base_pipe = pipe;
-}
-
-static void mdp4_overlay_setup_pipe_addr(struct msm_fb_data_type *mfd,
-			struct mdp4_overlay_pipe *pipe)
-{
-	MDPIBUF *iBuf = &mfd->ibuf;
-	struct fb_info *fbi;
-	int bpp;
-	uint8 *src;
 
 	/* whole screen for base layer */
 	src = (uint8 *) iBuf->buf;
