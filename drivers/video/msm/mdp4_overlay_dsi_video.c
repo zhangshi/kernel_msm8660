@@ -533,6 +533,27 @@ void mdp4_dsi_video_free_base_pipe(struct msm_fb_data_type *mfd)
 	vctrl->base_pipe = NULL;
 }
 
+void mdp4_dsi_video_base_swap(int cndx, struct mdp4_overlay_pipe *pipe)
+{
+	struct vsycn_ctrl *vctrl;
+
+	if (cndx >= MAX_CONTROLLER) {
+		pr_err("%s: out or range: cndx=%d\n", __func__, cndx);
+		return;
+	}
+
+	vctrl = &vsync_ctrl_db[cndx];
+	vctrl->base_pipe = pipe;
+}
+
+/* timing generator off */
+static void mdp4_dsi_video_tg_off(struct vsycn_ctrl *vctrl)
+{
+	MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 0); /* turn off timing generator */
+	/* some delay after turning off the tg */
+	msleep(20);
+}
+
 int mdp4_dsi_video_splash_done(void)
 {
 	struct vsycn_ctrl *vctrl;
